@@ -17,22 +17,12 @@ const Expense = sequelize.define('Expense', {
         type: DataTypes.STRING,
         allowNull: false,
     },
-    UserId: {
-        type: DataTypes.UUID,
-        references: {
-            model: User,
-            key: 'id',
-        },
-    },
-    CategoryId: {
-        type: DataTypes.UUID,
-        references: {
-            model: Category,
-            key: 'id',
-        },
-    },
 }, {
     timestamps: true,
 });
+
+Expense.belongsTo(Category);
+Expense.belongsTo(User, { foreignKey: 'UserId', as: 'user' });
+
 
 module.exports = Expense;

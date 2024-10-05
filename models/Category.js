@@ -15,4 +15,8 @@ const Category = sequelize.define('Category', {
     timestamps: true,
 });
 
+Category.associate = (models) => {
+    Category.hasMany(models.Expense);
+};
+
 module.exports = Category;
