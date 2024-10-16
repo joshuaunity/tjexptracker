@@ -4,12 +4,14 @@ const {
     getExpensesHandler,
     getExpenseHandler,
     updateExpenseHandler,
-    deleteExpenseHandler
+    deleteExpenseHandler,
+    getExpenseSummaryHandler,
 } = require('../../controllers/v1/expenseController');
 const validateToken = require('../../middleware/auth');
 
 const router = express.Router();
 
+router.get('/summary', validateToken, getExpenseSummaryHandler);
 router.post('', validateToken, createExpenseHandler);
 router.get('', validateToken, getExpensesHandler);
 router.get('/:id', validateToken, getExpenseHandler);

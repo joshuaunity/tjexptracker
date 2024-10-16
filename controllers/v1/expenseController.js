@@ -226,12 +226,65 @@ const deleteExpenseHandler = async (req, res) => {
     }
 };
 
+// @desc Get Expense Summary
+// @route GET /v1/expenses/summary
+// @access Private
+const getExpenseSummaryHandler = async (req, res) => {
+    try {
+        let { startDate, endDate } = req.query;
+        const user = req.user;
+        let expenses = [];
+
+        if (startDate && endDate) {
+            startDate = new Date(startDate);
+            endDate = new Date(endDate);
+            // add an extra day to the end date
+            endDate.setDate(endDate.getDate() + 1);
+
+            expenses = await Expense.findAll({
+                where: {
+                    UserId: user.id,
+                    createdAt: {
+                        [Op.between]: [startDate, endDate],
+                    }
+                },
+            });
+        } else {
+            expenses = await Expense.findAll({
+                where: {
+                    UserId: user.id,
+                },
+            });
+        }
+
+        let total = 0;
+        let average = 0;
+        expenses.forEach(expense => {
+            total += Number(expense.amount);
+        });
+
+        if (expenses.length > 0) {
+            average = total / expenses.length;
+        }
+
+        return res.status(200).json({
+            total,
+            average,
+        });
+    } catch (error) {
+        return res.status(500).json({
+            message: error.message,
+        });
+    }
+};
+
 module.exports = {
     createExpenseHandler,
     getExpensesHandler,
     getExpenseHandler,
     updateExpenseHandler,
     deleteExpenseHandler,
+    getExpenseSummaryHandler,
 };
 
 
