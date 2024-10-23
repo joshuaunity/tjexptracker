@@ -1,7 +1,11 @@
 const { Op } = require('sequelize');
+const path = require('path');
+const fs = require('fs');
+const { createObjectCsvWriter } = require('csv-writer');
 const Expense = require('../../models/Expense');
 const Category = require('../../models/Category');
-const User = require('../../models/User');
+const { checkMonthlyBudget } = require('../../utils/shared');
+const { error } = require('console');
 
 // @desc Create Expense
 // @route POST /v1/expenses
@@ -35,15 +39,27 @@ const createExpenseHandler = async (req, res) => {
             });
         }
 
-        const expense = await Expense.create({
-            amount,
-            narration,
-        });
+        const hasExceededBudget = await checkMonthlyBudget(user.id);
+        if (hasExceededBudget.message) {
+            return res.status(500).json({
+                message: hasExceededBudget.message,
+            });
+        }
+        else if (hasExceededBudget) {
+            return res.status(400).json({
+                message: 'You have exceeded your monthly budget',
+            });
+        } else {
+            const expense = await Expense.create({
+                amount,
+                narration,
+            });
 
-        expense.setUser(user);
-        expense.setCategory(category);
+            expense.setUser(user);
+            expense.setCategory(category);
 
-        res.status(201).json(expense);
+            res.status(201).json(expense);
+        }
     } catch (error) {
         return res.status(500).json({
             message: error.message,
@@ -57,7 +73,7 @@ const createExpenseHandler = async (req, res) => {
 const getExpensesHandler = async (req, res) => {
     try {
         const user = req.user;
-        let { filter, startDate, endDate } = req.query;
+        let { search, filter, startDate, endDate } = req.query;
 
         if (filter) {
             if (typeof filter !== 'string') {
@@ -82,14 +98,38 @@ const getExpensesHandler = async (req, res) => {
                     UserId: user.id,
                     CategoryId: category.id,
                 },
+                order: [['createdAt', 'DESC']],
             });
             return res.status(200).json(expenses);
         }
+
+        if (search) {
+            if (typeof search !== 'string') {
+                return res.status(400).json({
+                    message: 'Search must be a string',
+                });
+            }
+
+            // fetch all user expenses with the specified search term
+            const expenses = await Expense.findAll({
+                where: {
+                    UserId: user.id,
+                    narration: {
+                        [Op.iLike]: `%${search}%`,
+                    },
+                },
+                order: [['createdAt', 'DESC']],
+            });
+            return res.status(200).json(expenses);
+        }
+
+
         // fetch all user expenses
         const expenses = await Expense.findAll({
             where: {
                 UserId: user.id,
             },
+            order: [['createdAt', 'DESC']],
         });
 
         if (startDate && endDate) {
@@ -100,6 +140,7 @@ const getExpensesHandler = async (req, res) => {
 
             const expenses = await Expense.findAll({
                 where: {
+                    UserId: user.id,
                     createdAt: {
                         [Op.between]: [startDate, endDate],
                     }
@@ -278,6 +319,54 @@ const getExpenseSummaryHandler = async (req, res) => {
     }
 };
 
+// @desc Download Expense Statement
+// @route GET /v1/expenses/statement/download
+// @access Private
+const downloadExpenseStatementHandler = async (req, res) => {
+    try {
+        const expenses = await Expense.findAll({
+            where: {
+                UserId: req.user.id,
+            },
+        });
+        console.log("__dirname", __dirname);
+        const filePath = path.join(__dirname, 'expenses.csv');
+
+        const csvWriter = createObjectCsvWriter({
+            path: filePath,
+            header: [
+                { id: 'id', title: 'ID' },
+                { id: 'amount', title: 'Amount' },
+                { id: 'narration', title: 'Narration' },
+                { id: 'createdAt', title: 'Created At' },
+            ]
+        });
+
+        const expensesData = expenses.map(expense => ({
+            id: expense.id,
+            amount: expense.amount,
+            narration: expense.narration,
+            createdAt: expense.createdAt.toISOString().split('T')[0],
+        }));
+
+        await csvWriter.writeRecords(expensesData);
+
+        res.download(filePath, 'expenses.csv', (error) => {
+            if (error) {
+                return res.status(500).json({
+                    message: error.message,
+                });
+            }
+
+            fs.unlinkSync(filePath); // deletes the file
+        });
+    } catch (error) {
+        return res.status(500).json({
+            message: error.message,
+        });
+    }
+};
+
 module.exports = {
     createExpenseHandler,
     getExpensesHandler,
@@ -285,6 +374,7 @@ module.exports = {
     updateExpenseHandler,
     deleteExpenseHandler,
     getExpenseSummaryHandler,
+    downloadExpenseStatementHandler,
 };
 
 

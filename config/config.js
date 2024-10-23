@@ -13,6 +13,7 @@ config = {
     dialect: 'postgres',
   },
   jwtSecret: process.env.JWT_SECRET_KEY,
+  expenseBudget: process.env.EXPENSE_BUDGET,
 }
 
 module.exports = config;
